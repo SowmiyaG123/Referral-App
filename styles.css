@@ -1,0 +1,89 @@
+/* Reset & Base */
+body {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #f5faff;
+}
+
+/* Sticky Header */
+.dashboard-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: linear-gradient(to right, #e0f7ff, #cce5ff);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  border-bottom: 1px solid #b0d4f1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #90caf9;
+}
+
+.username {
+  font-weight: 600;
+  color: #0d47a1;
+}
+
+.xp-badge .badge {
+  background-color: #bbdefb;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1565c0;
+}
+
+.logout-btn {
+  background-color: #e3f2fd;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  color: #0d47a1;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.logout-btn:hover {
+  background-color: #bbdefb;
+}
+
+/* Referral Cards */
+.dashboard-content {
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.card {
+  background-color: #ffffff;
+  border: 1px solid #d0e3f0;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.card h3 {
+  margin: 0 0 8px;
+  color: #1565c0;
+}
+
+.card p {
+  margin: 0;
+  color: #444;
+  font-size: 14px;
+}

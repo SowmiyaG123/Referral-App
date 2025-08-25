@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Signup</title>
+</head>
+<body>
+  <h2>Signup Page</h2>
+  <form id="signupForm">
+    <label>Username:</label>
+    <input type="text" id="username" required />
+    <br><br>
+    <button type="submit">Sign Up</button>
+  </form>
+
+  <p id="status"></p>
+
+  <script>
+    const referralId = new URLSearchParams(window.location.search).get("ref");
+
+    document.getElementById("signupForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const username = document.getElementById("username").value;
+
+      const response = await fetch("http://localhost:8000/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, referral_id: referralId })
+      });
+
+      const result = await response.text();
+      try {
+        const parsed = JSON.parse(result);
+        document.getElementById("status").innerText = parsed.message;
+      } catch {
+        document.getElementById("status").innerText = result;
+      }
+    });
+  </script>
+</body>
+</html>
