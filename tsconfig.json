@@ -39,13 +39,15 @@
       {
         "name": "next"
       }
-    ]
+    ],
+    "strictNullChecks": true
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     "next-env.d.ts",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "backend/frontend/pages/ReferralDashboard.tsx"
   ],
   "exclude": [
     "node_modules"

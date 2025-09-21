@@ -2,6 +2,7 @@ import discord
 import requests
 import os
 import asyncio
+import logging
 from dotenv import load_dotenv
 
 # 🔧 Load environment variables
@@ -13,6 +14,7 @@ DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 # 🔧 Discord client setup
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 client = discord.Client(intents=intents)
 
 # 🔧 Supabase headers
@@ -28,23 +30,65 @@ def get_user_id(discord_id):
     resp = requests.get(url, headers=BASE_HEADERS)
     return resp.json()[0]["user_id"] if resp.ok and resp.json() else None
 
-# ✅ Utility: Send DM to user
-def send_discord_dm(discord_id, message):
-    dm_url = "https://discord.com/api/v10/users/@me/channels"
+# ✅ Utility: Check if bot can DM user
+def can_dm_user(discord_id):
     headers = {
         "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
         "Content-Type": "application/json"
     }
-    dm_resp = requests.post(dm_url, json={"recipient_id": discord_id}, headers=headers)
-    if not dm_resp.ok:
-        print(f"❌ DM channel creation failed: {dm_resp.text}")
-        return
+    dm_resp = requests.post("https://discord.com/api/v10/users/@me/channels",
+                            json={"recipient_id": discord_id}, headers=headers)
+    return dm_resp.ok
 
-    channel_id = dm_resp.json()["id"]
-    msg_url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
-    msg_resp = requests.post(msg_url, json={"content": message}, headers=headers)
-    if not msg_resp.ok:
-        print(f"❌ DM send failed: {msg_resp.text}")
+# ✅ Utility: Send DM to all Discord users with sender attribution
+async def send_discord_dm_to_all(message, sender_id=None):
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+
+    # Get sender's Discord ID from Supabase
+    sender_discord_id = None
+    try:
+        if sender_id:
+            res = requests.get(f"{SUPABASE_URL}/rest/v1/discord_users?select=discord_id&user_id=eq.{sender_id}", headers=BASE_HEADERS)
+            if res.ok and res.json():
+                sender_discord_id = res.json()[0]["discord_id"]
+    except Exception as e:
+        logging.warning(f"Sender ID lookup failed: {e}")
+
+    # Get sender display name
+    sender_name = "Someone"
+    try:
+        if sender_discord_id:
+            user_obj = await client.fetch_user(int(sender_discord_id))
+            sender_name = user_obj.name or f"Discord user {sender_discord_id}"
+    except Exception as e:
+        logging.warning(f"Display name fetch failed: {e}")
+        sender_name = f"Discord user {sender_discord_id}" if sender_discord_id else "Someone"
+
+    full_message = f"🔔 Update from {sender_name}:\n{message}"
+
+    # Fetch all Discord users
+    try:
+        res = requests.get(f"{SUPABASE_URL}/rest/v1/discord_users?select=discord_id", headers=BASE_HEADERS)
+        all_users = res.json() if res.ok else []
+        for user in all_users:
+            discord_id = user["discord_id"]
+            dm_resp = requests.post("https://discord.com/api/v10/users/@me/channels",
+                                    json={"recipient_id": discord_id}, headers=headers)
+            if not dm_resp.ok:
+                logging.warning(f"DM channel creation failed for {discord_id}: {dm_resp.text}")
+                continue
+            channel_id = dm_resp.json()["id"]
+            msg_url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+            msg_resp = requests.post(msg_url, json={"content": full_message}, headers=headers)
+            if msg_resp.ok:
+                logging.info(f"✅ DM sent to {discord_id}")
+            else:
+                logging.warning(f"DM send failed for {discord_id}: {msg_resp.text}")
+    except Exception as e:
+        logging.error(f"Failed to fetch Discord users: {e}")
 
 # ✅ Utility: Get progress from users table
 def get_progress(user_id):
@@ -96,6 +140,10 @@ async def on_message(message):
     discord_id = str(message.author.id)
 
     if message.content.lower() == "!start":
+        if not can_dm_user(discord_id):
+            await message.channel.send("⚠️ I can’t DM you. Please enable DMs from server members.")
+            return
+
         payload = {"discord_id": discord_id}
         check_url = f"{SUPABASE_URL}/rest/v1/discord_users?select=id&discord_id=eq.{discord_id}"
         check_response = requests.get(check_url, headers=BASE_HEADERS)
@@ -148,8 +196,8 @@ async def on_message(message):
 
         level, badge, milestone_msg = 0, None, None
         if new_xp >= 100: level, badge, milestone_msg = 3, "🏆", "💯 XP milestone reached!"
-        elif new_xp >= 50: level, badge, milestone_msg = 2, "🥇", "🎉 50 XP milestone!"
-        elif new_xp >= 10: level, badge, milestone_msg = 1, "🌱", "🌱 First milestone!"
+        elif new_x >= 50: level, badge, milestone_msg = 2, "🥇", "🎉 50 XP milestone!"
+        elif new_x >= 10: level, badge, milestone_msg = 1, "🌱", "🌱 First milestone!"
 
         requests.patch(user_url, headers=BASE_HEADERS, json={
             "earned_xp": new_xp,
@@ -164,7 +212,7 @@ async def on_message(message):
         notify_msg = f"🎉 Referral accepted for `{codename}`!\nYou earned 10 XP."
         if milestone_msg:
             notify_msg += f"\n{milestone_msg}"
-        send_discord_dm(discord_id, notify_msg)
+        await send_discord_dm_to_all(notify_msg, sender_id=user_id)
 
     elif message.content.lower() == "!update_status":
         await message.channel.send("📝 Enter the client's codename:")
@@ -197,7 +245,6 @@ async def on_message(message):
             await message.channel.send("❌ Status update failed.")
             return
 
-        # ✅ XP logic
         xp_map = {
             "Milestone Achieved": 30,
             "Client Paid": 50
@@ -209,9 +256,7 @@ async def on_message(message):
         current_xp = user_resp.json()[0]["earned_xp"] if user_resp.ok else 0
         new_xp = current_xp + xp_gain
 
-        level = 0
-        badge = None
-        milestone_msg = None
+        level, badge, milestone_msg = 0, None, None
         if new_xp >= 100: level, badge, milestone_msg = 3, "🏆", "💯 XP milestone reached!"
         elif new_xp >= 50: level, badge, milestone_msg = 2, "🥇", "🎉 50 XP milestone!"
         elif new_xp >= 10: level, badge, milestone_msg = 1, "🌱", "🌱 First milestone!"
@@ -229,7 +274,7 @@ async def on_message(message):
         notify_msg = f"📈 Referral `{client_codename}` updated to `{new_status}`.\nYou earned {xp_gain} XP."
         if milestone_msg:
             notify_msg += f"\n{milestone_msg}"
-        send_discord_dm(discord_id, notify_msg)
+        await send_discord_dm_to_all(notify_msg, sender_id=user_id)
 
     elif message.content.lower() == "!dashboard":
         user_id = get_user_id(discord_id)
@@ -257,7 +302,6 @@ async def on_message(message):
         msg = get_progress(user_id) if user_id else "⚠️ Not onboarded."
         await message.channel.send(msg)
 
-# ✅ Graceful shutdown to avoid asyncio warning on Windows
 try:
     client.run(DISCORD_BOT_TOKEN)
 except KeyboardInterrupt:
