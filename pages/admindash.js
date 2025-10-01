@@ -1,3 +1,4 @@
+//all crud possible except refresh prob in overview section
 import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/router";
@@ -197,8 +198,7 @@ export default function AdminDash() {
   }
 
   async function deleteItem(table, id) {
-    if (!confirm(`Delete ${table} record ${id}? This cannot be undone.`)) return;
-    
+   
     setLoading(true);
     try {
       console.log(`Deleting ${table} ${id}`);
