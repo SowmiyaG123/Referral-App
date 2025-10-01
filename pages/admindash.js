@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/router";
 
@@ -92,6 +92,7 @@ export default function AdminDash() {
     notifications: true,
   });
   const [theme, setTheme] = React.useState("light");
+  const [loading, setLoading] = useState(false);
 
   const tabs = [
     { id: "overview", label: "Overview" },
@@ -103,51 +104,130 @@ export default function AdminDash() {
     { id: "settings", label: "Settings" },
   ];
 
-  // Demo data for when database is empty
-  const demoUsers = [
-    { id: "23f56f64-2026-4840-87a9-7048909c79f5", email: "alice@example.com", username: "Alice Johnson", balance: 1250.5, joined: "2025-03-21", referrals: 15, status: "Active" },
-    { id: "25a9c43e-4986-4a71-ba39-2fa394aa67eb", email: "bob@example.com", username: "Bob Smith", balance: 850.75, joined: "2025-02-11", referrals: 8, status: "Active" },
-    { id: "e6a69136-054e-4ca4-98be-89d418c0bd56", email: "zara@example.com", username: "Zara Khan", balance: 410.0, joined: "2025-01-13", referrals: 27, status: "Disabled" },
-  ];
+  // Enhanced CRUD Operations with RLS fixes
+  async function createItem(table, data) {
+    setLoading(true);
+    try {
+      // Add required fields and timestamps
+      const enhancedData = {
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
 
-  const demoReferrals = [
-    { id: "68236ae7-6e0a-4bd4-8d48-bddf75299741", client_name: "John Doe", telegram_username: "johndoe", protocol_name: "Protocol Alpha", website_url: "https://protocol-alpha.com", status: "Approved", created_at: "2025-08-22" },
-    { id: "ca608d2f-2212-4f25-92bd-1cfe12d0cf8e", client_name: "Jane Smith", telegram_username: "janesmith", protocol_name: "Protocol Beta", website_url: "https://protocol-beta.com", status: "Pending", created_at: "2025-07-09" },
-  ];
+      // Add table-specific required fields
+      if (table === 'users') {
+        enhancedData.id = enhancedData.id || crypto.randomUUID();
+        enhancedData.username = enhancedData.username || `user_${Date.now()}`;
+        enhancedData.email = enhancedData.email || `user_${Date.now()}@example.com`;
+        enhancedData.status = enhancedData.status || 'Active';
+        enhancedData.role = enhancedData.role || 'client';
+        enhancedData.provider = enhancedData.provider || 'email';
+        enhancedData.balance = enhancedData.balance || 0;
+        enhancedData.referrals = enhancedData.referrals || 0;
+      }
 
-  const demoTasks = [
-    { id: "bd825e76-2a8b-4c1a-9757-1ffa3b5bcfd2", title: "Review payout requests", status: "In Progress", assigned_to: "Alice Johnson", due_date: "2025-09-20" },
-    { id: "7e6ee672-8a3b-4d28-b688-f9a8a02033c2", title: "Approve new referrals", status: "To Do", assigned_to: "Bob Smith", due_date: "2025-09-21" },
-  ];
+      if (table === 'referrals') {
+        enhancedData.id = enhancedData.id || crypto.randomUUID();
+        enhancedData.status = enhancedData.status || 'Just Referred';
+        enhancedData.referred_at = enhancedData.referred_at || new Date().toISOString();
+      }
 
-  const demoLogs = [
-    { id: "78a47372-cf98-4d5d-b490-09f0b13d7166", user_email: "alice@example.com", action: "Approved referral for Carol", created_at: "2025-09-14 18:45" },
-    { id: "d6b7cbfb-9644-4eec-b07b-1ab6c8db90a2", user_email: "bob@example.com", action: "Updated profile settings", created_at: "2025-09-14 17:01" },
-  ];
+      if (table === 'transactions') {
+        enhancedData.id = enhancedData.id || crypto.randomUUID();
+        enhancedData.amount = enhancedData.amount || 0;
+        enhancedData.date = enhancedData.date || new Date().toISOString().split('T')[0];
+      }
 
-  const demoNotifications = [
-    { id: 1, title: "System Update", message: "Your profile was updated successfully.", created_at: "2025-09-15 10:32" },
-    { id: 2, title: "New Referral", message: "User John Doe joined via referral.", created_at: "2025-09-14 18:45" },
-  ];
+      console.log(`Creating ${table}:`, enhancedData);
 
-  const demoTransactions = [
-    { id: "a502cb9d-6a3c-4d31-9f72-86670f481a65", name: "Sowmiya", type: "Credit", date: "10 Sep, 2025", price: "$50" },
-    { id: "01eba7a9-b412-4d87-85cc-80e86e1fc6fc", name: "Sowmi", type: "Credit", date: "12 Sep, 2025", price: "$30" },
-  ];
+      const { data: result, error } = await supabase
+        .from(table)
+        .insert([enhancedData])
+        .select()
+        .single();
 
-  // Helper functions
-  const money = (n) => (n == null ? "—" : `$${Number(n).toLocaleString()}`);
-  const shorten = (s = "") => (s.length > 12 ? `${s.slice(0, 6)}...${s.slice(-4)}` : s || "—");
+      if (error) {
+        console.error(`Create error for ${table}:`, error);
+        throw error;
+      }
+      
+      setNotif(`✅ ${table} created successfully`);
+      return result;
+    } catch (err) {
+      console.error("createItem error", err);
+      setNotif(`❌ Create error: ${err.message}`);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  // Logout function
-  const logout = async () => {
-    await supabase.auth.signOut();
-    router.push("/");
-  };
+  async function updateItem(table, id, data) {
+    setLoading(true);
+    try {
+      const updateData = {
+        ...data,
+        updated_at: new Date().toISOString(),
+      };
+
+      console.log(`Updating ${table} ${id}:`, updateData);
+
+      const { data: result, error } = await supabase
+        .from(table)
+        .update(updateData)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error(`Update error for ${table}:`, error);
+        throw error;
+      }
+      
+      setNotif(`✅ ${table} updated successfully`);
+      return result;
+    } catch (err) {
+      console.error("updateItem error", err);
+      setNotif(`❌ Update error: ${err.message}`);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteItem(table, id) {
+    if (!confirm(`Delete ${table} record ${id}? This cannot be undone.`)) return;
+    
+    setLoading(true);
+    try {
+      console.log(`Deleting ${table} ${id}`);
+
+      const { error } = await supabase
+        .from(table)
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        console.error(`Delete error for ${table}:`, error);
+        throw error;
+      }
+      
+      setNotif(`✅ ${table} deleted successfully`);
+      return true;
+    } catch (err) {
+      console.error("deleteItem error", err);
+      setNotif(`❌ Delete error: ${err.message}`);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // Fetch all data on component mount
   useEffect(() => {
     async function fetchAll() {
+      setLoading(true);
       try {
         const [
           usersRes,
@@ -182,6 +262,9 @@ export default function AdminDash() {
         setApprovals(approvalsRes.data || []);
       } catch (err) {
         console.error("fetchAll error", err);
+        setNotif(`❌ Fetch error: ${err.message}`);
+      } finally {
+        setLoading(false);
       }
     }
     fetchAll();
@@ -244,71 +327,14 @@ export default function AdminDash() {
     };
   }, []);
 
-  // CRUD Operations
-  async function createItem(table, data) {
-    try {
-      const { data: result, error } = await supabase
-        .from(table)
-        .insert([data])
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      setNotif(`${table} created successfully`);
-      return result;
-    } catch (err) {
-      console.error("createItem error", err);
-      setNotif(`Create error: ${err.message}`);
-      throw err;
-    }
-  }
-
-  async function updateItem(table, id, data) {
-    try {
-      const { data: result, error } = await supabase
-        .from(table)
-        .update(data)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      setNotif(`${table} updated successfully`);
-      return result;
-    } catch (err) {
-      console.error("updateItem error", err);
-      setNotif(`Update error: ${err.message}`);
-      throw err;
-    }
-  }
-
-  async function deleteItem(table, id) {
-    if (!confirm(`Delete ${table} record ${id}? This cannot be undone.`)) return;
-    
-    try {
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
-      
-      setNotif(`${table} deleted successfully`);
-      return true;
-    } catch (err) {
-      console.error("deleteItem error", err);
-      setNotif(`Delete error: ${err.message}`);
-      throw err;
-    }
-  }
-
-  // Modal State Management
+  // Modal State Management with improved typing
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("view");
   const [modalTable, setModalTable] = useState(null);
   const [modalRawObj, setModalRawObj] = useState(null);
+
+  // Use ref to track input changes without causing re-renders
+  const inputTimeoutRef = useRef(null);
 
   function openModal(table, mode = "view", record = null) {
     setModalTable(table);
@@ -316,7 +342,6 @@ export default function AdminDash() {
     if (record) {
       setModalRawObj(JSON.parse(JSON.stringify(record)));
     } else {
-      // Create empty object with default structure based on table
       const defaultObj = getDefaultObject(table);
       setModalRawObj(defaultObj);
     }
@@ -330,7 +355,9 @@ export default function AdminDash() {
         username: "",
         balance: 0,
         status: "Active",
-        referrals: 0
+        referrals: 0,
+        role: "client",
+        provider: "email"
       },
       referrals: {
         client_name: "",
@@ -338,7 +365,8 @@ export default function AdminDash() {
         protocol_name: "",
         website_url: "",
         github_link: "",
-        status: "Pending"
+        status: "Just Referred",
+        user_id: users[0]?.id || null
       },
       tasks: {
         title: "",
@@ -349,13 +377,15 @@ export default function AdminDash() {
       notifications: {
         title: "",
         message: "",
-        read: false
+        delivered: false,
+        channel: "frontend"
       },
       transactions: {
         name: "",
         type: "Credit",
+        amount: 0,
         date: new Date().toISOString().split('T')[0],
-        price: "$0"
+        status: "completed"
       }
     };
     return defaults[table] || {};
@@ -369,6 +399,8 @@ export default function AdminDash() {
   }
 
   async function saveModal() {
+    if (loading) return;
+    
     try {
       if (modalMode === "edit") {
         await updateItem(modalTable, modalRawObj.id, modalRawObj);
@@ -381,44 +413,75 @@ export default function AdminDash() {
     }
   }
 
-  // Form field definitions for each table
+  // Enhanced input handler with debouncing for typing performance
+  const handleInputChange = (field, value, fieldType = "text") => {
+    // Clear any existing timeout
+    if (inputTimeoutRef.current) {
+      clearTimeout(inputTimeoutRef.current);
+    }
+
+    // Set new timeout to update state after a short delay
+    inputTimeoutRef.current = setTimeout(() => {
+      setModalRawObj(prev => ({
+        ...prev,
+        [field]: fieldType === "number" ? (value === "" ? 0 : Number(value)) : 
+                 fieldType === "boolean" ? (value === "true") : value
+      }));
+    }, 10); // 10ms delay for smooth typing
+  };
+
+  // Enhanced form field definitions with proper validation
   function getTableFormFields(table) {
     const fields = {
       users: [
-        { field: "email", label: "Email", type: "email" },
-        { field: "username", label: "Username", type: "text" },
+        { field: "email", label: "Email", type: "email", required: true },
+        { field: "username", label: "Username", type: "text", required: true },
         { field: "balance", label: "Balance", type: "number" },
         { field: "status", label: "Status", type: "select", options: ["Active", "Disabled", "Suspended"] },
-        { field: "referrals", label: "Referrals", type: "number" }
+        { field: "referrals", label: "Referrals", type: "number" },
+        { field: "role", label: "Role", type: "select", options: ["client", "admin", "moderator"] }
       ],
       referrals: [
-        { field: "client_name", label: "Client Name", type: "text" },
+        { field: "client_name", label: "Client Name", type: "text", required: true },
         { field: "telegram_username", label: "Telegram Username", type: "text" },
         { field: "protocol_name", label: "Protocol Name", type: "text" },
         { field: "website_url", label: "Website URL", type: "url" },
         { field: "github_link", label: "GitHub Link", type: "url" },
-        { field: "status", label: "Status", type: "select", options: ["Pending", "Approved", "Rejected"] }
+        { field: "status", label: "Status", type: "select", options: ["Just Referred", "Client Paid", "Payout Initiated", "Milestone Achieved"] },
+        { field: "expected_payout", label: "Expected Payout", type: "number" }
       ],
       tasks: [
-        { field: "title", label: "Title", type: "text" },
+        { field: "title", label: "Title", type: "text", required: true },
         { field: "status", label: "Status", type: "select", options: ["To Do", "In Progress", "Completed"] },
         { field: "assigned_to", label: "Assigned To", type: "text" },
         { field: "due_date", label: "Due Date", type: "date" }
       ],
       notifications: [
-        { field: "title", label: "Title", type: "text" },
-        { field: "message", label: "Message", type: "text" },
-        { field: "read", label: "Read", type: "select", options: [true, false] }
+        { field: "title", label: "Title", type: "text", required: true },
+        { field: "message", label: "Message", type: "text", required: true },
+        { field: "delivered", label: "Delivered", type: "select", options: [true, false] },
+        { field: "channel", label: "Channel", type: "select", options: ["frontend", "email", "telegram"] }
       ],
       transactions: [
-        { field: "name", label: "Name", type: "text" },
+        { field: "name", label: "Name", type: "text", required: true },
         { field: "type", label: "Type", type: "select", options: ["Credit", "Debit"] },
-        { field: "date", label: "Date", type: "date" },
-        { field: "price", label: "Price", type: "text" }
+        { field: "amount", label: "Amount", type: "number", required: true },
+        { field: "date", label: "Date", type: "date", required: true },
+        { field: "status", label: "Status", type: "select", options: ["pending", "completed", "failed"] }
       ]
     };
     return fields[table] || [];
   }
+
+  // Helper functions
+  const money = (n) => (n == null ? "—" : `$${Number(n).toLocaleString()}`);
+  const shorten = (s = "") => (s.length > 12 ? `${s.slice(0, 6)}...${s.slice(-4)}` : s || "—");
+
+  // Logout function
+  const logout = async () => {
+    await supabase.auth.signOut();
+    router.push("/");
+  };
 
   // Tab Components
   const OverviewTab = ({ theme }) => (
@@ -453,8 +516,9 @@ export default function AdminDash() {
               cursor: "pointer",
             }}
             onClick={() => openModal("transactions", "create")}
+            disabled={loading}
           >
-            + Add Transaction
+            {loading ? "Adding..." : "+ Add Transaction"}
           </button>
         </div>
 
@@ -472,12 +536,12 @@ export default function AdminDash() {
               <th style={{ padding: 10, textAlign: "left" }}>Name</th>
               <th style={{ padding: 10, textAlign: "left" }}>Type</th>
               <th style={{ padding: 10, textAlign: "left" }}>Date</th>
-              <th style={{ padding: 10, textAlign: "right" }}>Price</th>
+              <th style={{ padding: 10, textAlign: "right" }}>Amount</th>
               <th style={{ padding: 10, textAlign: "right" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {(transactions.length ? transactions : demoTransactions).map((tx) => (
+            {transactions.map((tx) => (
               <tr
                 key={tx.id}
                 style={{
@@ -490,29 +554,39 @@ export default function AdminDash() {
                 <td style={{ padding: 10, fontWeight: 600 }}>{tx.name}</td>
                 <td style={{ padding: 10 }}>{tx.type}</td>
                 <td style={{ padding: 10 }}>{tx.date}</td>
-                <td style={{ padding: 10, textAlign: "right" }}>{tx.price}</td>
+                <td style={{ padding: 10, textAlign: "right" }}>{money(tx.amount)}</td>
                 <td style={{ padding: 10, textAlign: "right" }}>
                   <button 
                     onClick={() => openModal("transactions", "view", tx)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     View
                   </button>
                   <button 
                     onClick={() => openModal("transactions", "edit", tx)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     Edit
                   </button>
                   <button 
                     onClick={() => deleteItem("transactions", tx.id)}
                     style={{ padding: "4px 8px", borderRadius: 4, background: "#dc2626", color: "white" }}
+                    disabled={loading}
                   >
                     Delete
                   </button>
                 </td>
               </tr>
             ))}
+            {transactions.length === 0 && (
+              <tr>
+                <td colSpan="6" style={{ padding: 20, textAlign: "center", color: theme === "dark" ? "#888" : "#666" }}>
+                  No transactions found. Create your first transaction!
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -520,7 +594,6 @@ export default function AdminDash() {
   );
 
   const UsersTab = () => {
-    const renderRows = users.length ? users : demoUsers;
     return (
       <div style={{ padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -528,8 +601,9 @@ export default function AdminDash() {
           <button 
             onClick={() => openModal("users", "create")} 
             style={{ padding: "8px 16px", borderRadius: 6, background: "#1d4ed8", color: "white" }}
+            disabled={loading}
           >
-            + Add User
+            {loading ? "Adding..." : "+ Add User"}
           </button>
         </div>
 
@@ -547,7 +621,7 @@ export default function AdminDash() {
             </tr>
           </thead>
           <tbody>
-            {renderRows.map((u) => (
+            {users.map((u) => (
               <tr key={u.id}>
                 <td style={tdStyle}>{shorten(u.id)}</td>
                 <td style={tdStyle}>{u.email}</td>
@@ -560,24 +634,34 @@ export default function AdminDash() {
                   <button 
                     onClick={() => openModal("users", "view", u)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     View
                   </button>
                   <button 
                     onClick={() => openModal("users", "edit", u)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     Edit
                   </button>
                   <button 
                     onClick={() => deleteItem("users", u.id)}
                     style={{ padding: "4px 8px", borderRadius: 4, background: "#dc2626", color: "white" }}
+                    disabled={loading}
                   >
                     Delete
                   </button>
                 </td>
               </tr>
             ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan="8" style={{ padding: 20, textAlign: "center", color: "#666" }}>
+                  No users found. Create your first user!
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -585,7 +669,6 @@ export default function AdminDash() {
   };
 
   const ReferralsTab = () => {
-    const renderRows = referrals.length ? referrals : demoReferrals;
     return (
       <div style={{ padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -593,8 +676,9 @@ export default function AdminDash() {
           <button 
             onClick={() => openModal("referrals", "create")} 
             style={{ padding: "8px 16px", borderRadius: 6, background: "#1d4ed8", color: "white" }}
+            disabled={loading}
           >
-            + Add Referral
+            {loading ? "Adding..." : "+ Add Referral"}
           </button>
         </div>
 
@@ -611,7 +695,7 @@ export default function AdminDash() {
             </tr>
           </thead>
           <tbody>
-            {renderRows.map((ref) => (
+            {referrals.map((ref) => (
               <tr key={ref.id}>
                 <td style={tdStyle}>{ref.client_name}</td>
                 <td style={tdStyle}>{ref.telegram_username}</td>
@@ -639,24 +723,34 @@ export default function AdminDash() {
                   <button 
                     onClick={() => openModal("referrals", "view", ref)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     View
                   </button>
                   <button 
                     onClick={() => openModal("referrals", "edit", ref)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     Edit
                   </button>
                   <button 
                     onClick={() => deleteItem("referrals", ref.id)}
                     style={{ padding: "4px 8px", borderRadius: 4, background: "#dc2626", color: "white" }}
+                    disabled={loading}
                   >
                     Delete
                   </button>
                 </td>
               </tr>
             ))}
+            {referrals.length === 0 && (
+              <tr>
+                <td colSpan="7" style={{ padding: 20, textAlign: "center", color: "#666" }}>
+                  No referrals found. Create your first referral!
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -664,7 +758,6 @@ export default function AdminDash() {
   };
 
   const TasksTab = () => {
-    const renderRows = tasks.length ? tasks : demoTasks;
     return (
       <div style={{ padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -672,8 +765,9 @@ export default function AdminDash() {
           <button 
             onClick={() => openModal("tasks", "create")} 
             style={{ padding: "8px 16px", borderRadius: 6, background: "#1d4ed8", color: "white" }}
+            disabled={loading}
           >
-            + Add Task
+            {loading ? "Adding..." : "+ Add Task"}
           </button>
         </div>
 
@@ -688,7 +782,7 @@ export default function AdminDash() {
             </tr>
           </thead>
           <tbody>
-            {renderRows.map((task) => (
+            {tasks.map((task) => (
               <tr key={task.id}>
                 <td style={tdStyle}>{task.title}</td>
                 <td style={tdStyle}>
@@ -710,24 +804,34 @@ export default function AdminDash() {
                   <button 
                     onClick={() => openModal("tasks", "view", task)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     View
                   </button>
                   <button 
                     onClick={() => openModal("tasks", "edit", task)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     Edit
                   </button>
                   <button 
                     onClick={() => deleteItem("tasks", task.id)}
                     style={{ padding: "4px 8px", borderRadius: 4, background: "#dc2626", color: "white" }}
+                    disabled={loading}
                   >
                     Delete
                   </button>
                 </td>
               </tr>
             ))}
+            {tasks.length === 0 && (
+              <tr>
+                <td colSpan="5" style={{ padding: 20, textAlign: "center", color: "#666" }}>
+                  No tasks found. Create your first task!
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -735,7 +839,6 @@ export default function AdminDash() {
   };
 
   const LogsTab = () => {
-    const renderRows = logs.length ? logs : demoLogs;
     return (
       <div style={{ padding: 24 }}>
         <h2>📊 Logs</h2>
@@ -749,27 +852,36 @@ export default function AdminDash() {
             </tr>
           </thead>
           <tbody>
-            {renderRows.map((log) => (
+            {logs.map((log) => (
               <tr key={log.id}>
-                <td style={tdStyle}>{log.user_email || log.user}</td>
+                <td style={tdStyle}>{log.user_email || log.user || "System"}</td>
                 <td style={tdStyle}>{log.action}</td>
-                <td style={tdStyle}>{log.created_at || log.at}</td>
+                <td style={tdStyle}>{log.created_at || "—"}</td>
                 <td style={tdStyle}>
                   <button 
                     onClick={() => openModal("audit_logs", "view", log)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     View
                   </button>
                   <button 
                     onClick={() => deleteItem("audit_logs", log.id)}
                     style={{ padding: "4px 8px", borderRadius: 4, background: "#dc2626", color: "white" }}
+                    disabled={loading}
                   >
                     Delete
                   </button>
                 </td>
               </tr>
             ))}
+            {logs.length === 0 && (
+              <tr>
+                <td colSpan="4" style={{ padding: 20, textAlign: "center", color: "#666" }}>
+                  No logs found.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -777,7 +889,6 @@ export default function AdminDash() {
   };
 
   const NotificationsTab = () => {
-    const renderRows = notifications.length ? notifications : demoNotifications;
     return (
       <div style={{ padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -785,8 +896,9 @@ export default function AdminDash() {
           <button 
             onClick={() => openModal("notifications", "create")} 
             style={{ padding: "8px 16px", borderRadius: 6, background: "#1d4ed8", color: "white" }}
+            disabled={loading}
           >
-            + Add Notification
+            {loading ? "Adding..." : "+ Add Notification"}
           </button>
         </div>
 
@@ -796,12 +908,12 @@ export default function AdminDash() {
               <th style={thStyle}>Title</th>
               <th style={thStyle}>Message</th>
               <th style={thStyle}>Date</th>
-              <th style={thStyle}>Read</th>
+              <th style={thStyle}>Delivered</th>
               <th style={thStyle}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {renderRows.map((notif) => (
+            {notifications.map((notif) => (
               <tr key={notif.id}>
                 <td style={tdStyle}>{notif.title}</td>
                 <td style={tdStyle}>{notif.message}</td>
@@ -811,34 +923,44 @@ export default function AdminDash() {
                     padding: "4px 8px",
                     borderRadius: 12,
                     fontSize: "12px",
-                    background: notif.read ? "#10b981" : "#f59e0b",
+                    background: notif.delivered ? "#10b981" : "#f59e0b",
                     color: "white"
                   }}>
-                    {notif.read ? "Read" : "Unread"}
+                    {notif.delivered ? "Delivered" : "Pending"}
                   </span>
                 </td>
                 <td style={tdStyle}>
                   <button 
                     onClick={() => openModal("notifications", "view", notif)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     View
                   </button>
                   <button 
                     onClick={() => openModal("notifications", "edit", notif)} 
                     style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                    disabled={loading}
                   >
                     Edit
                   </button>
                   <button 
                     onClick={() => deleteItem("notifications", notif.id)}
                     style={{ padding: "4px 8px", borderRadius: 4, background: "#dc2626", color: "white" }}
+                    disabled={loading}
                   >
                     Delete
                   </button>
                 </td>
               </tr>
             ))}
+            {notifications.length === 0 && (
+              <tr>
+                <td colSpan="5" style={{ padding: 20, textAlign: "center", color: "#666" }}>
+                  No notifications found. Create your first notification!
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -857,7 +979,7 @@ export default function AdminDash() {
     };
 
     const saveSettings = () => {
-      setNotif("Settings saved successfully!");
+      setNotif("✅ Settings saved successfully!");
     };
 
     return (
@@ -947,7 +1069,7 @@ export default function AdminDash() {
     }
   };
 
-  // Modal Component
+  // Enhanced Modal Component with better input handling
   const Modal = () =>
     modalOpen ? (
       <div
@@ -986,11 +1108,13 @@ export default function AdminDash() {
             <div>
               <strong style={{ fontSize: 20 }}>
                 {modalMode === "view" ? "View" : modalMode === "edit" ? "Edit" : "Create"} {modalTable}
+                {loading && " (Loading...)"}
               </strong>
             </div>
             <div>
               <button
                 onClick={closeModal}
+                disabled={loading}
                 style={{
                   marginRight: 8,
                   background: theme === "dark" ? "#333" : "#eee",
@@ -998,7 +1122,8 @@ export default function AdminDash() {
                   border: "none",
                   borderRadius: 6,
                   padding: "8px 16px",
-                  cursor: "pointer",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  opacity: loading ? 0.6 : 1,
                 }}
               >
                 Close
@@ -1006,16 +1131,18 @@ export default function AdminDash() {
               {modalMode !== "view" && (
                 <button
                   onClick={saveModal}
+                  disabled={loading}
                   style={{
-                    background: "#1d4ed8",
+                    background: loading ? "#6b7280" : "#1d4ed8",
                     color: "#fff",
                     padding: "8px 16px",
                     borderRadius: 6,
-                    cursor: "pointer",
+                    cursor: loading ? "not-allowed" : "pointer",
                     border: "none",
+                    opacity: loading ? 0.6 : 1,
                   }}
                 >
-                  Save
+                  {loading ? "Saving..." : "Save"}
                 </button>
               )}
             </div>
@@ -1035,23 +1162,22 @@ export default function AdminDash() {
                 return (
                   <div key={field.field} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     <label style={{ color: theme === "dark" ? "#eee" : "#222", fontWeight: 500 }}>
-                      {field.label}:
+                      {field.label} {field.required && "*"}:
                     </label>
                     <select
                       value={value}
-                      disabled={modalMode === "view"}
-                      onChange={(e) =>
-                        setModalRawObj({ ...modalRawObj, [field.field]: e.target.value })
-                      }
+                      disabled={modalMode === "view" || loading}
+                      onChange={(e) => handleInputChange(field.field, e.target.value)}
                       style={{
                         padding: "8px 12px",
                         borderRadius: 6,
                         border: `1px solid ${theme === "dark" ? "#444" : "#ccc"}`,
                         backgroundColor: theme === "dark" ? "#2c2c3a" : "#fff",
                         color: theme === "dark" ? "#eee" : "#000",
-                        cursor: modalMode === "view" ? "not-allowed" : "pointer",
+                        cursor: (modalMode === "view" || loading) ? "not-allowed" : "pointer",
                       }}
                     >
+                      <option value="">Select {field.label}</option>
                       {field.options.map((opt) => (
                         <option key={opt} value={opt}>
                           {String(opt)}
@@ -1065,25 +1191,20 @@ export default function AdminDash() {
               return (
                 <div key={field.field} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <label style={{ color: theme === "dark" ? "#eee" : "#222", fontWeight: 500 }}>
-                    {field.label}:
+                    {field.label} {field.required && "*"}:
                   </label>
                   <input
                     type={field.type}
                     value={value}
-                    disabled={modalMode === "view"}
-                    onChange={(e) =>
-                      setModalRawObj({
-                        ...modalRawObj,
-                        [field.field]: field.type === "number" ? Number(e.target.value) : e.target.value,
-                      })
-                    }
+                    disabled={modalMode === "view" || loading}
+                    onChange={(e) => handleInputChange(field.field, e.target.value, field.type)}
                     style={{
                       padding: "8px 12px",
                       borderRadius: 6,
                       border: `1px solid ${theme === "dark" ? "#444" : "#ccc"}`,
                       backgroundColor: theme === "dark" ? "#2c2c3a" : "#fff",
                       color: theme === "dark" ? "#eee" : "#000",
-                      cursor: modalMode === "view" ? "not-allowed" : "text",
+                      cursor: (modalMode === "view" || loading) ? "not-allowed" : "text",
                     }}
                   />
                 </div>
@@ -1115,12 +1236,12 @@ export default function AdminDash() {
           alignItems: "center",
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 22 }}>Admin Dashboard</h1>
+        <h1 style={{ margin: 0, fontSize: 22 }}>Admin Dashboard {loading}</h1>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
           {notif && (
             <span
               style={{
-                background: "#111827",
+                background: notif.includes("❌") ? "#dc2626" : "#111827",
                 color: "#fff",
                 padding: "6px 12px",
                 borderRadius: 8,
@@ -1132,17 +1253,19 @@ export default function AdminDash() {
           )}
           <button
             onClick={logout}
+            disabled={loading}
             style={{
-              backgroundColor: "#dc2626",
+              backgroundColor: loading ? "#6b7280" : "#dc2626",
               color: "#fff",
               border: "none",
               borderRadius: 6,
               padding: "8px 16px",
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
               fontWeight: "600",
+              opacity: loading ? 0.6 : 1,
             }}
           >
-            Logout
+            {loading ? "Processing..." : "Logout"}
           </button>
         </div>
       </nav>
@@ -1160,23 +1283,41 @@ export default function AdminDash() {
           {tabs.map((tab) => (
             <div
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => !loading && setActiveTab(tab.id)}
               style={{
                 padding: "12px 24px",
-                cursor: "pointer",
+                cursor: loading ? "not-allowed" : "pointer",
                 backgroundColor:
                   activeTab === tab.id ? (theme === "dark" ? "#1d2442" : "#e0e7ff") : "transparent",
                 fontWeight: activeTab === tab.id ? 700 : 500,
                 borderLeft: activeTab === tab.id ? "4px solid #2563eb" : "4px solid transparent",
                 color: theme === "dark" ? "#f5f7fa" : "#222",
                 transition: "all 0.2s ease",
+                opacity: loading ? 0.6 : 1,
               }}
             >
               {tab.label}
             </div>
           ))}
         </aside>
-        <main style={{ flex: 1, padding: 24 }}>{renderActiveTab()}</main>
+        <main style={{ flex: 1, padding: 24, opacity: loading ? 0.6 : 1 }}>
+          {loading && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 1000,
+              background: 'rgba(0,0,0,0.8)',
+              color: 'white',
+              padding: '20px',
+              borderRadius: '8px'
+            }}>
+              Loading...
+            </div>
+          )}
+          {renderActiveTab()}
+        </main>
       </div>
       <Modal />
     </div>
