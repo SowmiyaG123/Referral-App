@@ -1,4 +1,3 @@
-//all crud possible except refresh prob in overview section
 import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/router";
@@ -1251,6 +1250,20 @@ export default function AdminDash() {
               {notif}
             </span>
           )}
+          <button
+  onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+  style={{
+    background: "none",
+    border: `1px solid ${theme === "dark" ? "#555" : "#ccc"}`,
+    borderRadius: 6,
+    padding: "6px 12px",
+    cursor: "pointer",
+    color: theme === "dark" ? "#fff" : "#000",
+  }}
+>
+  {theme === "light" ? "🌙" : "☀️"}
+</button>
+
           <button
             onClick={logout}
             disabled={loading}
