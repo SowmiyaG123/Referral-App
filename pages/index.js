@@ -2,7 +2,6 @@ import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// --- Supabase client ---
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -15,8 +14,8 @@ export default function Home() {
   const [adminCreds, setAdminCreds] = useState({ email: "", password: "" });
   const [userCreds, setUserCreds] = useState({ email: "", password: "" });
   const [notifications, setNotifications] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // --- Helper to push notifications ---
   const pushNotification = (msg) => {
     const id = Date.now();
     setNotifications((prev) => [...prev, { id, msg }]);
@@ -25,7 +24,6 @@ export default function Home() {
     }, 5000);
   };
 
-  // --- Realtime Subscriptions (Transactions + Approvals) ---
   useEffect(() => {
     const txChannel = supabase
       .channel("transactions-changes")
@@ -33,7 +31,7 @@ export default function Home() {
         "postgres_changes",
         { event: "*", schema: "public", table: "transactions" },
         (payload) => {
-          console.log("🔄 Transaction change:", payload);
+          console.log("Transaction change:", payload);
           pushNotification(`Transaction ${payload.eventType} detected`);
         }
       )
@@ -45,7 +43,7 @@ export default function Home() {
         "postgres_changes",
         { event: "*", schema: "public", table: "approvals" },
         (payload) => {
-          console.log("🔄 Approval change:", payload);
+          console.log("Approval change:", payload);
           pushNotification(`Approval ${payload.eventType} detected`);
         }
       )
@@ -57,47 +55,145 @@ export default function Home() {
     };
   }, []);
 
-  // --- Admin Login ---
-  const handleAdminLogin = () => {
-    try {
-      const ADMIN_EMAIL = "admin@relapp.com";
-      const ADMIN_PASSWORD = "admin123";
+  const handleAdminLogin = async () => {
+    const ADMIN_EMAIL = "admin@relapp.com";
+    const ADMIN_PASSWORD = "admin123";
 
-      if (
-        adminCreds.email === ADMIN_EMAIL &&
-        adminCreds.password === ADMIN_PASSWORD
-      ) {
-        document.cookie = `oauth_role=admin; path=/; SameSite=Lax`;
+    if (!adminCreds.email || !adminCreds.password) {
+      pushNotification("❌ Please enter email and password");
+      return;
+    }
+
+    if (adminCreds.email !== ADMIN_EMAIL || adminCreds.password !== ADMIN_PASSWORD) {
+      pushNotification("❌ Invalid admin credentials");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      console.log("Attempting admin login with Supabase...");
+      
+      let authResult = await supabase.auth.signInWithPassword({
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
+      });
+
+      // If login fails because user doesn't exist, create the user
+      if (authResult.error && authResult.error.message.includes("Invalid login credentials")) {
+        console.log("Admin user doesn't exist, creating...");
+        
+        const signUpResult = await supabase.auth.signUp({
+          email: ADMIN_EMAIL,
+          password: ADMIN_PASSWORD,
+          options: {
+            data: {
+              role: 'admin',
+              name: 'Admin'
+            },
+            emailRedirectTo: undefined
+          }
+        });
+
+        if (signUpResult.error) {
+          throw new Error("Failed to create admin: " + signUpResult.error.message);
+        }
+
+        // Try signing in again
+        authResult = await supabase.auth.signInWithPassword({
+          email: ADMIN_EMAIL,
+          password: ADMIN_PASSWORD,
+        });
+      }
+
+      if (authResult.error) {
+        throw new Error(authResult.error.message);
+      }
+
+      console.log("Admin login successful");
+      document.cookie = `oauth_role=admin; path=/; SameSite=Lax`;
+      pushNotification("✅ Admin login successful!");
+      
+      setTimeout(() => {
         router.push("/admindash");
-      } else {
-        throw new Error("Invalid admin email or password");
-      }
+      }, 500);
     } catch (err) {
+      console.error("Admin login error:", err);
       pushNotification("❌ " + err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // --- User Login ---
-  const handleUserLogin = () => {
+  const handleUserLogin = async () => {
+    const VALID_EMAIL = "user@relapp.com";
+    const VALID_PASSWORD = "user123";
+
+    if (!userCreds.email || !userCreds.password) {
+      pushNotification("❌ Please enter email and password");
+      return;
+    }
+
+    if (userCreds.email !== VALID_EMAIL || userCreds.password !== VALID_PASSWORD) {
+      pushNotification("❌ Invalid user credentials");
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      const USER_EMAIL = "user@relapp.com";
-      const USER_PASSWORD = "user123";
+      console.log("Attempting user login with Supabase...");
+      
+      let authResult = await supabase.auth.signInWithPassword({
+        email: VALID_EMAIL,
+        password: VALID_PASSWORD,
+      });
 
-      if (
-        userCreds.email === USER_EMAIL &&
-        userCreds.password === USER_PASSWORD
-      ) {
-        document.cookie = `oauth_role=client; path=/; SameSite=Lax`;
-        router.push("/clientdash");
-      } else {
-        throw new Error("Invalid user email or password");
+      // If login fails because user doesn't exist, create the user
+      if (authResult.error && authResult.error.message.includes("Invalid login credentials")) {
+        console.log("User doesn't exist, creating...");
+        
+        const signUpResult = await supabase.auth.signUp({
+          email: VALID_EMAIL,
+          password: VALID_PASSWORD,
+          options: {
+            data: {
+              role: 'user',
+              name: 'User'
+            },
+            emailRedirectTo: undefined
+          }
+        });
+
+        if (signUpResult.error) {
+          throw new Error("Failed to create user: " + signUpResult.error.message);
+        }
+
+        // Try signing in again
+        authResult = await supabase.auth.signInWithPassword({
+          email: VALID_EMAIL,
+          password: VALID_PASSWORD,
+        });
       }
+
+      if (authResult.error) {
+        throw new Error(authResult.error.message);
+      }
+
+      console.log("User login successful, session created");
+      pushNotification("✅ Login successful! Redirecting...");
+      
+      setTimeout(() => {
+        router.push("/clientdash");
+      }, 500);
     } catch (err) {
+      console.error("User login error:", err);
       pushNotification("❌ " + err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // --- Register (Invite Flow) ---
   const handleRegister = async () => {
     try {
       const res = await fetch("http://localhost:8000/register", {
@@ -150,12 +246,10 @@ export default function Home() {
           Secure access for partners to track referrals, earnings and payouts.
         </div>
 
-        {/* --- Admin + User Login --- */}
         {!showRegister && (
           <>
-            {/* Admin Login */}
             <h2 style={{ color: "#fff", marginBottom: 10, textAlign: "left" }}>
-              🔐 Admin Login
+              Admin Login
             </h2>
             <input
               type="email"
@@ -164,7 +258,9 @@ export default function Home() {
               onChange={(e) =>
                 setAdminCreds({ ...adminCreds, email: e.target.value })
               }
+              onKeyPress={(e) => e.key === "Enter" && handleAdminLogin()}
               style={inputStyle}
+              disabled={isLoading}
             />
             <input
               type="password"
@@ -173,18 +269,20 @@ export default function Home() {
               onChange={(e) =>
                 setAdminCreds({ ...adminCreds, password: e.target.value })
               }
+              onKeyPress={(e) => e.key === "Enter" && handleAdminLogin()}
               style={inputStyle}
+              disabled={isLoading}
             />
             <button
               onClick={handleAdminLogin}
-              style={{ ...primaryBtnStyle, marginBottom: 20 }}
+              style={{ ...primaryBtnStyle, marginBottom: 20, opacity: isLoading ? 0.6 : 1 }}
+              disabled={isLoading}
             >
-              Admin Login
+              {isLoading ? "Logging in..." : "Admin Login"}
             </button>
 
-            {/* User Login */}
             <h2 style={{ color: "#fff", margin: "20px 0 10px", textAlign: "left" }}>
-              👤 User Login
+              User Login
             </h2>
             <input
               type="email"
@@ -193,7 +291,9 @@ export default function Home() {
               onChange={(e) =>
                 setUserCreds({ ...userCreds, email: e.target.value })
               }
+              onKeyPress={(e) => e.key === "Enter" && handleUserLogin()}
               style={inputStyle}
+              disabled={isLoading}
             />
             <input
               type="password"
@@ -202,13 +302,16 @@ export default function Home() {
               onChange={(e) =>
                 setUserCreds({ ...userCreds, password: e.target.value })
               }
+              onKeyPress={(e) => e.key === "Enter" && handleUserLogin()}
               style={inputStyle}
+              disabled={isLoading}
             />
             <button
               onClick={handleUserLogin}
-              style={{ ...primaryBtnStyle, marginBottom: 20 }}
+              style={{ ...primaryBtnStyle, marginBottom: 20, opacity: isLoading ? 0.6 : 1 }}
+              disabled={isLoading}
             >
-              User Login
+              {isLoading ? "Logging in..." : "User Login"}
             </button>
 
             <hr style={{ border: "1px solid #2c2f44", margin: "20px 0" }} />
@@ -245,10 +348,9 @@ export default function Home() {
           </>
         )}
 
-        {/* --- Register Form --- */}
         {showRegister && (
           <div style={{ textAlign: "left", marginTop: 20 }}>
-            <h2 style={{ color: "#fff", marginBottom: 12 }}>✉️ Register</h2>
+            <h2 style={{ color: "#fff", marginBottom: 12 }}>Register</h2>
             <input
               type="email"
               placeholder="Email"
@@ -268,6 +370,7 @@ export default function Home() {
               placeholder="Invite Code"
               value={form.invite}
               onChange={(e) => setForm({ ...form, invite: e.target.value })}
+              onKeyPress={(e) => e.key === "Enter" && handleRegister()}
               style={inputStyle}
             />
             <button onClick={handleRegister} style={primaryBtnStyle}>
@@ -282,7 +385,7 @@ export default function Home() {
               }}
               onClick={() => setShowRegister(false)}
             >
-              ← Back to Login
+              Back to Login
             </div>
           </div>
         )}
@@ -300,7 +403,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* --- Notifications --- */}
       <div
         style={{
           position: "fixed",
@@ -309,6 +411,7 @@ export default function Home() {
           display: "flex",
           flexDirection: "column",
           gap: "10px",
+          zIndex: 1000,
         }}
       >
         {notifications.map((n) => (
@@ -332,7 +435,6 @@ export default function Home() {
   );
 }
 
-// --- Shared styles ---
 const primaryBtnStyle = {
   padding: "13px 16px",
   border: "none",
@@ -346,6 +448,7 @@ const primaryBtnStyle = {
   cursor: "pointer",
   marginTop: "0px",
   boxShadow: "0 2px 8px #5865F244",
+  transition: "background 0.2s, opacity 0.2s",
 };
 
 const inputStyle = {
@@ -356,4 +459,5 @@ const inputStyle = {
   border: "1px solid #444",
   background: "#1f2337",
   color: "#fff",
+  boxSizing: "border-box",
 };

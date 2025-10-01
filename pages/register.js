@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-
+import Link from "next/link";
 // Initialize Supabase client from env vars
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -91,9 +91,9 @@ export default function Register() {
 
         <p style={styles.backLink}>
           ← Back to{" "}
-          <a href="/" style={{ color: "#61dafb", textDecoration: "none" }}>
+          <Link href="/" style={{ color: "#61dafb", textDecoration: "none" }}>
             Login
-          </a>
+          </Link>
         </p>
       </form>
     </div>
