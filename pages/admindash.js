@@ -82,6 +82,8 @@ export default function AdminDash() {
   const [wallets, setWallets] = useState([]);
   const [approvals, setApprovals] = useState([]);
   const [settings, setSettings] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [myReferrals, setMyReferrals] = useState([]);
 
   const [notif, setNotif] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
@@ -98,11 +100,31 @@ export default function AdminDash() {
     { id: "overview", label: "Overview" },
     { id: "users", label: "Users" },
     { id: "referrals", label: "Referrals" },
+    { id: "my-referrals", label: "My Referrals" },
     { id: "tasks", label: "Tasks" },
     { id: "logs", label: "Logs" },
     { id: "notifications", label: "Notifications" },
     { id: "settings", label: "Settings" },
   ];
+
+  // Get current user on component mount
+  useEffect(() => {
+    async function getCurrentUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+      
+      if (user) {
+        // Fetch referrals created by current user
+        const { data: userReferrals } = await supabase
+          .from('referrals')
+          .select('*')
+          .eq('user_id', user.id);
+        
+        setMyReferrals(userReferrals || []);
+      }
+    }
+    getCurrentUser();
+  }, []);
 
   // Enhanced CRUD Operations with RLS fixes
   async function createItem(table, data) {
@@ -131,6 +153,11 @@ export default function AdminDash() {
         enhancedData.id = enhancedData.id || crypto.randomUUID();
         enhancedData.status = enhancedData.status || 'Just Referred';
         enhancedData.referred_at = enhancedData.referred_at || new Date().toISOString();
+        // Auto-assign current user as the creator if not specified
+        if (currentUser && !enhancedData.user_id) {
+          enhancedData.user_id = currentUser.id;
+          enhancedData.created_by = currentUser.email;
+        }
       }
 
       if (table === 'transactions') {
@@ -153,6 +180,12 @@ export default function AdminDash() {
       }
       
       setNotif(`✅ ${table} created successfully`);
+      
+      // If it's a referral and created by current user, update myReferrals
+      if (table === 'referrals' && currentUser && result.user_id === currentUser.id) {
+        setMyReferrals(prev => [...prev, result]);
+      }
+      
       return result;
     } catch (err) {
       console.error("createItem error", err);
@@ -186,6 +219,14 @@ export default function AdminDash() {
       }
       
       setNotif(`✅ ${table} updated successfully`);
+      
+      // If it's a referral and belongs to current user, update myReferrals
+      if (table === 'referrals' && currentUser && result.user_id === currentUser.id) {
+        setMyReferrals(prev => prev.map(item => 
+          item.id === result.id ? result : item
+        ));
+      }
+      
       return result;
     } catch (err) {
       console.error("updateItem error", err);
@@ -197,7 +238,6 @@ export default function AdminDash() {
   }
 
   async function deleteItem(table, id) {
-   
     setLoading(true);
     try {
       console.log(`Deleting ${table} ${id}`);
@@ -213,6 +253,12 @@ export default function AdminDash() {
       }
       
       setNotif(`✅ ${table} deleted successfully`);
+      
+      // If it's a referral and belongs to current user, update myReferrals
+      if (table === 'referrals') {
+        setMyReferrals(prev => prev.filter(item => item.id !== id));
+      }
+      
       return true;
     } catch (err) {
       console.error("deleteItem error", err);
@@ -293,6 +339,11 @@ export default function AdminDash() {
               }
 
               setNotif(`📩 New referral: ${payload.new.client_name || payload.new.referred}`);
+              
+              // If the new referral belongs to current user, add to myReferrals
+              if (currentUser && payload.new.user_id === currentUser.id) {
+                setMyReferrals(prev => [...prev, payload.new]);
+              }
             }
 
             if (payload.eventType === "INSERT") {
@@ -301,8 +352,20 @@ export default function AdminDash() {
               setState((prev) =>
                 prev.map((item) => (item.id === payload.new.id ? payload.new : item))
               );
+              
+              // If updated referral belongs to current user, update myReferrals
+              if (table === "referrals" && currentUser && payload.new.user_id === currentUser.id) {
+                setMyReferrals(prev => prev.map(item => 
+                  item.id === payload.new.id ? payload.new : item
+                ));
+              }
             } else if (payload.eventType === "DELETE") {
               setState((prev) => prev.filter((item) => item.id !== payload.old.id));
+              
+              // If deleted referral belongs to current user, remove from myReferrals
+              if (table === "referrals") {
+                setMyReferrals(prev => prev.filter(item => item.id !== payload.old.id));
+              }
             }
           }
         )
@@ -324,7 +387,7 @@ export default function AdminDash() {
     return () => {
       channels.forEach((ch) => supabase.removeChannel(ch));
     };
-  }, []);
+  }, [currentUser]);
 
   // Modal State Management with improved typing
   const [modalOpen, setModalOpen] = useState(false);
@@ -365,7 +428,8 @@ export default function AdminDash() {
         website_url: "",
         github_link: "",
         status: "Just Referred",
-        user_id: users[0]?.id || null
+        user_id: currentUser?.id || users[0]?.id || null,
+        created_by: currentUser?.email || "user"
       },
       tasks: {
         title: "",
@@ -756,6 +820,111 @@ export default function AdminDash() {
     );
   };
 
+  // NEW: My Referrals Tab - Shows only referrals created by current user
+  const MyReferralsTab = () => {
+    return (
+      <div style={{ padding: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <h2>👤 My Referrals</h2>
+          <button 
+            onClick={() => openModal("referrals", "create")} 
+            style={{ padding: "8px 16px", borderRadius: 6, background: "#1d4ed8", color: "white" }}
+            disabled={loading}
+          >
+            {loading ? "Adding..." : "+ Add Referral"}
+          </button>
+        </div>
+
+        {currentUser ? (
+          <>
+            <div style={{ marginBottom: 16, padding: 12, background: "#f0f9ff", borderRadius: 8, border: "1px solid #bae6fd" }}>
+              <strong>Welcome, Admin!</strong>
+              <p style={{ margin: "4px 0 0 0", color: "#666" }}>
+                Here are all the referrals you've created. You have {myReferrals.length} referral(s).
+              </p>
+            </div>
+
+            <table style={{ width: "100%", borderCollapse: "collapse", borderRadius: 8 }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Client Name</th>
+                  <th style={thStyle}>Telegram</th>
+                  <th style={thStyle}>Protocol</th>
+                  <th style={thStyle}>Website</th>
+                  <th style={thStyle}>Status</th>
+                  <th style={thStyle}>Date</th>
+                  <th style={thStyle}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myReferrals.map((ref) => (
+                  <tr key={ref.id}>
+                    <td style={tdStyle}>{ref.client_name}</td>
+                    <td style={tdStyle}>{ref.telegram_username}</td>
+                    <td style={tdStyle}>{ref.protocol_name}</td>
+                    <td style={tdStyle}>
+                      <a href={ref.website_url} target="_blank" rel="noopener noreferrer" style={{ color: "#1d4ed8" }}>
+                        {ref.website_url?.substring(0, 20)}...
+                      </a>
+                    </td>
+                    <td style={tdStyle}>
+                      <span style={{
+                        padding: "4px 8px",
+                        borderRadius: 12,
+                        fontSize: "12px",
+                        background: 
+                          ref.status === "Approved" ? "#10b981" :
+                          ref.status === "Rejected" ? "#ef4444" : "#f59e0b",
+                        color: "white"
+                      }}>
+                        {ref.status}
+                      </span>
+                    </td>
+                    <td style={tdStyle}>{ref.created_at ? new Date(ref.created_at).toLocaleDateString() : "—"}</td>
+                    <td style={tdStyle}>
+                      <button 
+                        onClick={() => openModal("referrals", "view", ref)} 
+                        style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                        disabled={loading}
+                      >
+                        View
+                      </button>
+                      <button 
+                        onClick={() => openModal("referrals", "edit", ref)} 
+                        style={{ marginRight: 8, padding: "4px 8px", borderRadius: 4 }}
+                        disabled={loading}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => deleteItem("referrals", ref.id)}
+                        style={{ padding: "4px 8px", borderRadius: 4, background: "#dc2626", color: "white" }}
+                        disabled={loading}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {myReferrals.length === 0 && (
+                  <tr>
+                    <td colSpan="7" style={{ padding: 20, textAlign: "center", color: "#666" }}>
+                      You haven't created any referrals yet. Create your first referral!
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </>
+        ) : (
+          <div style={{ padding: 20, textAlign: "center", color: "#666", background: "#f9fafb", borderRadius: 8 }}>
+            <p>Please log in to view your referrals.</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const TasksTab = () => {
     return (
       <div style={{ padding: 24 }}>
@@ -1055,6 +1224,8 @@ export default function AdminDash() {
         return <UsersTab />;
       case "referrals":
         return <ReferralsTab />;
+      case "my-referrals":
+        return <MyReferralsTab />;
       case "tasks":
         return <TasksTab />;
       case "logs":
@@ -1250,19 +1421,24 @@ export default function AdminDash() {
               {notif}
             </span>
           )}
+          {currentUser && (
+            <span style={{ fontSize: "14px", opacity: 0.9 }}>
+              Welcome, Admin!!
+            </span>
+          )}
           <button
-  onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-  style={{
-    background: "none",
-    border: `1px solid ${theme === "dark" ? "#555" : "#ccc"}`,
-    borderRadius: 6,
-    padding: "6px 12px",
-    cursor: "pointer",
-    color: theme === "dark" ? "#fff" : "#000",
-  }}
->
-  {theme === "light" ? "🌙" : "☀️"}
-</button>
+            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            style={{
+              background: "none",
+              border: `1px solid ${theme === "dark" ? "#555" : "#ccc"}`,
+              borderRadius: 6,
+              padding: "6px 12px",
+              cursor: "pointer",
+              color: theme === "dark" ? "#fff" : "#000",
+            }}
+          >
+            {theme === "light" ? "🌙" : "☀️"}
+          </button>
 
           <button
             onClick={logout}
