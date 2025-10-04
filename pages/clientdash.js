@@ -15,6 +15,7 @@ export default function ClientDash() {
   const [avatarFile, setAvatarFile] = useState(null);
   const [notif, setNotif] = useState(null);
   const [showReferForm, setShowReferForm] = useState(false);
+  const [activeSection, setActiveSection] = useState("tasks"); // Default to tasks view
   const [referForm, setReferForm] = useState({
     clientName: "",
     companyName: "",
@@ -329,7 +330,6 @@ export default function ClientDash() {
         scope: referForm.scope.trim() || null,
         status: "Just Referred", // Default status
         description: `Client referral for ${referForm.protocolName}`,
-        // Note: Many columns in your table are nullable, so we only include what we have
       };
 
       console.log("Submitting referral with correct schema:", referralData);
@@ -402,12 +402,69 @@ export default function ClientDash() {
     }
   };
 
-  // Styles (same as before)
+  // Styles
   const container = {
     fontFamily: "Arial, sans-serif",
-    padding: "20px",
     backgroundColor: "#f0fdf4",
     minHeight: "100vh",
+    display: "flex",
+  };
+
+  const sidebar = {
+    width: "250px",
+    backgroundColor: "#047857",
+    color: "#fff",
+    padding: "20px 0",
+    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+  };
+
+  const sidebarHeader = {
+    padding: "0 20px 20px 20px",
+    borderBottom: "1px solid rgba(255,255,255,0.2)",
+    textAlign: "center",
+  };
+
+  const avatar = {
+    width: 80,
+    height: 80,
+    borderRadius: "50%",
+    border: "3px solid #fff",
+    objectFit: "cover",
+    background: "#e5e7eb",
+    marginBottom: 12,
+  };
+
+  const sidebarMenu = {
+    flex: 1,
+    padding: "20px 0",
+  };
+
+  const menuItem = {
+    display: "flex",
+    alignItems: "center",
+    padding: "12px 20px",
+    cursor: "pointer",
+    transition: "background 0.2s",
+    borderLeft: "4px solid transparent",
+  };
+
+  const activeMenuItem = {
+    ...menuItem,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderLeft: "4px solid #fff",
+  };
+
+  const menuIcon = {
+    marginRight: "12px",
+    fontSize: "18px",
+  };
+
+  const mainContent = {
+    flex: 1,
+    padding: "20px",
+    overflowY: "auto",
   };
 
   const header = {
@@ -417,22 +474,6 @@ export default function ClientDash() {
     borderRadius: "8px",
     textAlign: "center",
     marginBottom: "20px",
-    position: "relative",
-  };
-
-  const logoutButton = {
-    position: "absolute",
-    top: "15px",
-    right: "20px",
-    padding: "8px 20px",
-    borderRadius: "8px",
-    border: "none",
-    background: "#dc2626",
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: "14px",
-    cursor: "pointer",
-    transition: "background 0.2s",
   };
 
   const section = {
@@ -458,16 +499,6 @@ export default function ClientDash() {
   const td = {
     padding: "10px",
     borderBottom: "1px solid #ddd",
-  };
-
-  const avatar = {
-    width: 80,
-    height: 80,
-    borderRadius: "50%",
-    border: "3px solid #047857",
-    objectFit: "cover",
-    background: "#e5e7eb",
-    marginBottom: 12,
   };
 
   const notifStyle = {
@@ -537,6 +568,272 @@ export default function ClientDash() {
     boxSizing: "border-box",
   };
 
+  // Render different sections based on active section
+  const renderMainContent = () => {
+    switch (activeSection) {
+      case "tasks":
+        return (
+          <div style={section}>
+            <h2 style={{ marginTop: 0, color: "#047857" }}>My Tasks</h2>
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Task</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>Approval</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={td}>Logo Design</td>
+                  <td style={td}>
+                    <span style={{ color: "#f59e0b", fontWeight: "500" }}>
+                      In Progress
+                    </span>
+                  </td>
+                  <td style={td}>
+                    <span style={{ color: "#6b7280" }}>Pending</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style={td}>App Deployment</td>
+                  <td style={td}>
+                    <span style={{ color: "#10b981", fontWeight: "500" }}>
+                      Completed
+                    </span>
+                  </td>
+                  <td style={td}>
+                    <span style={{ color: "#10b981" }}>Approved</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        );
+      
+      case "wallet":
+        return (
+          <div style={section}>
+            <h2 style={{ marginTop: 0, color: "#047857" }}>Wallet</h2>
+            <p style={{ fontSize: "15px", margin: "8px 0" }}>
+              <strong>Status:</strong>{" "}
+              <span style={{ color: "#10b981" }}>Connected</span>
+            </p>
+            <p style={{ fontSize: "15px", margin: "8px 0" }}>
+              <strong>Total Value:</strong> $2,300
+            </p>
+            <p style={{ fontSize: "15px", margin: "8px 0" }}>
+              <strong>Pending:</strong> $200
+            </p>
+            <p style={{ fontSize: "15px", margin: "8px 0" }}>
+              <strong>Available Balance:</strong> $2,100
+            </p>
+          </div>
+        );
+      
+      case "profile":
+        return (
+          <div style={section}>
+            <h2 style={{ marginTop: 0, color: "#047857" }}>Profile</h2>
+            <div style={{ textAlign: "center" }}>
+              {!editing ? (
+                <>
+                  <img
+                    src={profile.avatar_url || generateDefaultAvatar(profile.name)}
+                    alt="Avatar"
+                    style={avatar}
+                    onError={(e) => {
+                      e.target.src = generateDefaultAvatar(profile.name);
+                    }}
+                  />
+                  <div style={{ fontWeight: "bold", fontSize: "20px", marginBottom: "4px" }}>
+                    {profile.name || "Unnamed User"}
+                  </div>
+                  <div style={{ color: "#6b7280", marginBottom: "16px", fontSize: "15px" }}>
+                    {profile.email}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditedProfile({
+                        name: profile.name,
+                        avatar_url: profile.avatar_url,
+                      });
+                      setEditing(true);
+                    }}
+                    style={buttonPrimary}
+                  >
+                    Edit Profile
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ position: "relative", display: "inline-block" }}>
+                    <img
+                      src={editedProfile.avatar_url || profile.avatar_url || generateDefaultAvatar(profile.name)}
+                      alt="Avatar"
+                      style={avatar}
+                      onError={(e) => {
+                        e.target.src = generateDefaultAvatar(profile.name);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      style={{
+                        position: "absolute",
+                        bottom: 0,
+                        right: 0,
+                        background: "#059669",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: 36,
+                        height: 36,
+                        color: "#fff",
+                        fontSize: 18,
+                        cursor: "pointer",
+                        boxShadow: "0 2px 8px rgba(5, 150, 105, 0.4)",
+                      }}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      📷
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={handleAvatarChange}
+                    />
+                  </div>
+                  
+                  <div style={{ marginTop: "16px" }}>
+                    <input
+                      type="text"
+                      style={{
+                        width: "85%",
+                        padding: "10px",
+                        borderRadius: "8px",
+                        border: "2px solid #d1fae5",
+                        marginBottom: "12px",
+                        fontSize: "15px",
+                        boxSizing: "border-box",
+                      }}
+                      value={editedProfile.name || ""}
+                      onChange={(e) =>
+                        setEditedProfile({ ...editedProfile, name: e.target.value })
+                      }
+                      placeholder="Your Name"
+                    />
+                  </div>
+                  
+                  <div>
+                    <input
+                      style={{
+                        width: "85%",
+                        padding: "10px",
+                        borderRadius: "8px",
+                        border: "2px solid #e5e7eb",
+                        marginBottom: "16px",
+                        fontSize: "15px",
+                        color: "#6b7280",
+                        background: "#f9fafb",
+                        boxSizing: "border-box",
+                      }}
+                      value={profile.email}
+                      disabled
+                      placeholder="Email"
+                    />
+                  </div>
+                  
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      gap: "12px",
+                    }}
+                  >
+                    <button
+                      onClick={handleSave}
+                      style={{
+                        padding: "10px 28px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: "#059669",
+                        color: "#fff",
+                        fontWeight: "bold",
+                        fontSize: "15px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditing(false);
+                        setAvatarFile(null);
+                        setEditedProfile({});
+                      }}
+                      style={{
+                        padding: "10px 28px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: "#e5e7eb",
+                        color: "#374151",
+                        fontWeight: "bold",
+                        fontSize: "15px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      
+      default:
+        return (
+          <div style={section}>
+            <h2 style={{ marginTop: 0, color: "#047857" }}>My Tasks</h2>
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>Task</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>Approval</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={td}>Logo Design</td>
+                  <td style={td}>
+                    <span style={{ color: "#f59e0b", fontWeight: "500" }}>
+                      In Progress
+                    </span>
+                  </td>
+                  <td style={td}>
+                    <span style={{ color: "#6b7280" }}>Pending</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style={td}>App Deployment</td>
+                  <td style={td}>
+                    <span style={{ color: "#10b981", fontWeight: "500" }}>
+                      Completed
+                    </span>
+                  </td>
+                  <td style={td}>
+                    <span style={{ color: "#10b981" }}>Approved</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        );
+    }
+  };
+
   if (loading) {
     return (
       <div
@@ -574,362 +871,220 @@ export default function ClientDash() {
 
   return (
     <div style={container}>
-      <div style={header}>
-        <h1 style={{ margin: "0 0 8px 0" }}>Client Dashboard</h1>
-        <p style={{ margin: 0, fontSize: "14px", opacity: 0.9 }}>
-          View your tasks, approvals, and wallet
-        </p>
-        <button
-          onClick={handleLogout}
-          style={logoutButton}
-          onMouseOver={(e) => (e.target.style.background = "#b91c1c")}
-          onMouseOut={(e) => (e.target.style.background = "#dc2626")}
-        >
-          Logout
-        </button>
-      </div>
-
-      <div style={{ marginBottom: 20, textAlign: "center" }}>
-        <button
-          style={buttonPrimary}
-          onClick={() => setShowReferForm(true)}
-          onMouseOver={(e) => (e.target.style.background = "#059669")}
-          onMouseOut={(e) => (e.target.style.background = "#047857")}
-        >
-          Refer a Client
-        </button>
-      </div>
-
-      {showReferForm && (
-        <div style={overlayStyle} onClick={() => setShowReferForm(false)}>
-          <form
-            onSubmit={handleReferSubmit}
-            style={modalStyle}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ marginBottom: "20px", marginTop: 0, color: "#047857" }}>
-              Refer a Client
-            </h3>
-            
-            <input
-              type="text"
-              placeholder="Your Name *"
-              value={referForm.clientName}
-              onChange={(e) =>
-                setReferForm({ ...referForm, clientName: e.target.value })
-              }
-              style={inputGlassStyle}
-              required
-            />
-            
-            <input
-              type="text"
-              placeholder="Telegram Username *"
-              value={referForm.companyName}
-              onChange={(e) =>
-                setReferForm({ ...referForm, companyName: e.target.value })
-              }
-              style={inputGlassStyle}
-              required
-            />
-            
-            <input
-              type="text"
-              placeholder="Protocol Name *"
-              value={referForm.protocolName}
-              onChange={(e) =>
-                setReferForm({ ...referForm, protocolName: e.target.value })
-              }
-              style={inputGlassStyle}
-              required
-            />
-            
-            <input
-              type="url"
-              placeholder="Website URL *"
-              value={referForm.websiteUrl}
-              onChange={(e) =>
-                setReferForm({ ...referForm, websiteUrl: e.target.value })
-              }
-              style={inputGlassStyle}
-              required
-            />
-            
-            <input
-              type="url"
-              placeholder="GitHub Repo Link (Optional)"
-              value={referForm.githubLink}
-              onChange={(e) =>
-                setReferForm({ ...referForm, githubLink: e.target.value })
-              }
-              style={inputGlassStyle}
-            />
-            
-            <select
-              value={referForm.auditDate}
-              onChange={(e) =>
-                setReferForm({ ...referForm, auditDate: e.target.value })
-              }
-              style={inputGlassStyle}
-            >
-              <option value="">Preferred Audit Date (Optional)</option>
-              <option value="1 week">1 week</option>
-              <option value="2 weeks">2 weeks</option>
-              <option value="1 month">1 month</option>
-            </select>
-            
-            <textarea
-              placeholder="Scope and Additional Information (Optional)"
-              value={referForm.scope}
-              onChange={(e) =>
-                setReferForm({ ...referForm, scope: e.target.value })
-              }
-              style={{
-                ...inputGlassStyle,
-                minHeight: "80px",
-                resize: "vertical",
-                fontFamily: "Arial, sans-serif",
-              }}
-            />
-
-            <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
-              <button
-                type="submit"
-                style={{
-                  ...buttonPrimary,
-                  flex: 1,
-                  padding: "12px",
-                }}
-              >
-                Submit Referral
-              </button>
-              <button
-                type="button"
-                style={{
-                  ...buttonPrimary,
-                  flex: 1,
-                  padding: "12px",
-                  background: "#6b7280",
-                }}
-                onClick={() => setShowReferForm(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+      {/* Sidebar */}
+      <div style={sidebar}>
+        <div style={sidebarHeader}>
+          <img
+            src={profile.avatar_url || generateDefaultAvatar(profile.name)}
+            alt="Avatar"
+            style={avatar}
+            onError={(e) => {
+              e.target.src = generateDefaultAvatar(profile.name);
+            }}
+          />
+          <div style={{ fontWeight: "bold", fontSize: "16px", marginBottom: "4px" }}>
+            {profile.name || "Unnamed User"}
+          </div>
+          <div style={{ fontSize: "12px", opacity: 0.8 }}>
+            {profile.email}
+          </div>
         </div>
-      )}
 
-      <div style={section}>
-        <h2 style={{ marginTop: 0, color: "#047857" }}>My Tasks</h2>
-        <table style={table}>
-          <thead>
-            <tr>
-              <th style={th}>Task</th>
-              <th style={th}>Status</th>
-              <th style={th}>Approval</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style={td}>Logo Design</td>
-              <td style={td}>
-                <span style={{ color: "#f59e0b", fontWeight: "500" }}>
-                  In Progress
-                </span>
-              </td>
-              <td style={td}>
-                <span style={{ color: "#6b7280" }}>Pending</span>
-              </td>
-            </tr>
-            <tr>
-              <td style={td}>App Deployment</td>
-              <td style={td}>
-                <span style={{ color: "#10b981", fontWeight: "500" }}>
-                  Completed
-                </span>
-              </td>
-              <td style={td}>
-                <span style={{ color: "#10b981" }}>Approved</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div style={sidebarMenu}>
+          <div
+            style={activeSection === "tasks" ? activeMenuItem : menuItem}
+            onClick={() => setActiveSection("tasks")}
+          >
+            <span style={menuIcon}>📋</span>
+            Tasks
+          </div>
+          <div
+            style={activeSection === "wallet" ? activeMenuItem : menuItem}
+            onClick={() => setActiveSection("wallet")}
+          >
+            <span style={menuIcon}>💰</span>
+            Wallet
+          </div>
+          <div
+            style={activeSection === "profile" ? activeMenuItem : menuItem}
+            onClick={() => setActiveSection("profile")}
+          >
+            <span style={menuIcon}>👤</span>
+            Profile
+          </div>
+        </div>
+
+        <div style={{ padding: "20px" }}>
+          <button
+            onClick={handleLogout}
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: "8px",
+              border: "none",
+              background: "#dc2626",
+              color: "#fff",
+              fontWeight: "bold",
+              fontSize: "14px",
+              cursor: "pointer",
+              transition: "background 0.2s",
+            }}
+            onMouseOver={(e) => (e.target.style.background = "#b91c1c")}
+            onMouseOut={(e) => (e.target.style.background = "#dc2626")}
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
-      <div style={section}>
-        <h2 style={{ marginTop: 0, color: "#047857" }}>Wallet</h2>
-        <p style={{ fontSize: "15px", margin: "8px 0" }}>
-          <strong>Status:</strong>{" "}
-          <span style={{ color: "#10b981" }}>Connected</span>
-        </p>
-        <p style={{ fontSize: "15px", margin: "8px 0" }}>
-          <strong>Total Value:</strong> $2,300
-        </p>
-        <p style={{ fontSize: "15px", margin: "8px 0" }}>
-          <strong>Pending:</strong> $200
-        </p>
-      </div>
+      {/* Main Content */}
+      <div style={mainContent}>
+        <div style={header}>
+          <h1 style={{ margin: "0 0 8px 0" }}>Client Dashboard</h1>
+          <p style={{ margin: 0, fontSize: "14px", opacity: 0.9 }}>
+            {activeSection === "tasks" && "View your tasks and approvals"}
+            {activeSection === "wallet" && "Manage your wallet and transactions"}
+            {activeSection === "profile" && "Update your profile information"}
+          </p>
+        </div>
 
-      <div style={section}>
-        <h2 style={{ marginTop: 0, color: "#047857" }}>Profile</h2>
-        <div style={{ textAlign: "center" }}>
-          {!editing ? (
-            <>
-              <img
-                src={profile.avatar_url || generateDefaultAvatar(profile.name)}
-                alt="Avatar"
-                style={avatar}
-                onError={(e) => {
-                  e.target.src = generateDefaultAvatar(profile.name);
+        {activeSection === "tasks" && (
+          <div style={{ marginBottom: 20, textAlign: "center" }}>
+            <button
+              style={buttonPrimary}
+              onClick={() => setShowReferForm(true)}
+              onMouseOver={(e) => (e.target.style.background = "#059669")}
+              onMouseOut={(e) => (e.target.style.background = "#047857")}
+            >
+              Refer a Client
+            </button>
+          </div>
+        )}
+
+        {showReferForm && (
+          <div style={overlayStyle} onClick={() => setShowReferForm(false)}>
+            <form
+              onSubmit={handleReferSubmit}
+              style={modalStyle}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={{ marginBottom: "20px", marginTop: 0, color: "#047857" }}>
+                Refer a Client
+              </h3>
+              
+              <input
+                type="text"
+                placeholder="Your Name *"
+                value={referForm.clientName}
+                onChange={(e) =>
+                  setReferForm({ ...referForm, clientName: e.target.value })
+                }
+                style={inputGlassStyle}
+                required
+              />
+              
+              <input
+                type="text"
+                placeholder="Telegram Username *"
+                value={referForm.companyName}
+                onChange={(e) =>
+                  setReferForm({ ...referForm, companyName: e.target.value })
+                }
+                style={inputGlassStyle}
+                required
+              />
+              
+              <input
+                type="text"
+                placeholder="Protocol Name *"
+                value={referForm.protocolName}
+                onChange={(e) =>
+                  setReferForm({ ...referForm, protocolName: e.target.value })
+                }
+                style={inputGlassStyle}
+                required
+              />
+              
+              <input
+                type="url"
+                placeholder="Website URL *"
+                value={referForm.websiteUrl}
+                onChange={(e) =>
+                  setReferForm({ ...referForm, websiteUrl: e.target.value })
+                }
+                style={inputGlassStyle}
+                required
+              />
+              
+              <input
+                type="url"
+                placeholder="GitHub Repo Link (Optional)"
+                value={referForm.githubLink}
+                onChange={(e) =>
+                  setReferForm({ ...referForm, githubLink: e.target.value })
+                }
+                style={inputGlassStyle}
+              />
+              
+              <select
+                value={referForm.auditDate}
+                onChange={(e) =>
+                  setReferForm({ ...referForm, auditDate: e.target.value })
+                }
+                style={inputGlassStyle}
+              >
+                <option value="">Preferred Audit Date (Optional)</option>
+                <option value="1 week">1 week</option>
+                <option value="2 weeks">2 weeks</option>
+                <option value="1 month">1 month</option>
+              </select>
+              
+              <textarea
+                placeholder="Scope and Additional Information (Optional)"
+                value={referForm.scope}
+                onChange={(e) =>
+                  setReferForm({ ...referForm, scope: e.target.value })
+                }
+                style={{
+                  ...inputGlassStyle,
+                  minHeight: "80px",
+                  resize: "vertical",
+                  fontFamily: "Arial, sans-serif",
                 }}
               />
-              <div style={{ fontWeight: "bold", fontSize: "20px", marginBottom: "4px" }}>
-                {profile.name || "Unnamed User"}
-              </div>
-              <div style={{ color: "#6b7280", marginBottom: "16px", fontSize: "15px" }}>
-                {profile.email}
-              </div>
-              <button
-                onClick={() => {
-                  setEditedProfile({
-                    name: profile.name,
-                    avatar_url: profile.avatar_url,
-                  });
-                  setEditing(true);
-                }}
-                style={buttonPrimary}
-              >
-                Edit Profile
-              </button>
-            </>
-          ) : (
-            <>
-              <div style={{ position: "relative", display: "inline-block" }}>
-                <img
-                  src={editedProfile.avatar_url || profile.avatar_url || generateDefaultAvatar(profile.name)}
-                  alt="Avatar"
-                  style={avatar}
-                  onError={(e) => {
-                    e.target.src = generateDefaultAvatar(profile.name);
+
+              <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+                <button
+                  type="submit"
+                  style={{
+                    ...buttonPrimary,
+                    flex: 1,
+                    padding: "12px",
                   }}
-                />
+                >
+                  Submit Referral
+                </button>
                 <button
                   type="button"
                   style={{
-                    position: "absolute",
-                    bottom: 0,
-                    right: 0,
-                    background: "#059669",
-                    border: "none",
-                    borderRadius: "50%",
-                    width: 36,
-                    height: 36,
-                    color: "#fff",
-                    fontSize: 18,
-                    cursor: "pointer",
-                    boxShadow: "0 2px 8px rgba(5, 150, 105, 0.4)",
+                    ...buttonPrimary,
+                    flex: 1,
+                    padding: "12px",
+                    background: "#6b7280",
                   }}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  📷
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={handleAvatarChange}
-                />
-              </div>
-              
-              <div style={{ marginTop: "16px" }}>
-                <input
-                  type="text"
-                  style={{
-                    width: "85%",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    border: "2px solid #d1fae5",
-                    marginBottom: "12px",
-                    fontSize: "15px",
-                    boxSizing: "border-box",
-                  }}
-                  value={editedProfile.name || ""}
-                  onChange={(e) =>
-                    setEditedProfile({ ...editedProfile, name: e.target.value })
-                  }
-                  placeholder="Your Name"
-                />
-              </div>
-              
-              <div>
-                <input
-                  style={{
-                    width: "85%",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    border: "2px solid #e5e7eb",
-                    marginBottom: "16px",
-                    fontSize: "15px",
-                    color: "#6b7280",
-                    background: "#f9fafb",
-                    boxSizing: "border-box",
-                  }}
-                  value={profile.email}
-                  disabled
-                  placeholder="Email"
-                />
-              </div>
-              
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  gap: "12px",
-                }}
-              >
-                <button
-                  onClick={handleSave}
-                  style={{
-                    padding: "10px 28px",
-                    borderRadius: "8px",
-                    border: "none",
-                    background: "#059669",
-                    color: "#fff",
-                    fontWeight: "bold",
-                    fontSize: "15px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => {
-                    setEditing(false);
-                    setAvatarFile(null);
-                    setEditedProfile({});
-                  }}
-                  style={{
-                    padding: "10px 28px",
-                    borderRadius: "8px",
-                    border: "none",
-                    background: "#e5e7eb",
-                    color: "#374151",
-                    fontWeight: "bold",
-                    fontSize: "15px",
-                    cursor: "pointer",
-                  }}
+                  onClick={() => setShowReferForm(false)}
                 >
                   Cancel
                 </button>
               </div>
-            </>
-          )}
-        </div>
-      </div>
+            </form>
+          </div>
+        )}
 
-      {notif && <div style={notifStyle}>{notif}</div>}
+        {renderMainContent()}
+
+        {notif && <div style={notifStyle}>{notif}</div>}
+      </div>
     </div>
   );
 }
